@@ -305,24 +305,38 @@ class Subscription extends Model
     /**
      * Cancel the subscription.
      *
+     * @param  string  $endDate
      * @return $this
      */
-    public function cancel()
+    public function cancel($endDate = null)
     {
         $subscription = $this->asBraintreeSubscription();
+
+        if (!$endDate) {
+            $endDate = $subscription->billingPeriodEndDate;
+        }
 
         if ($this->onTrial()) {
             BraintreeSubscription::cancel($subscription->id);
 
             $this->markAsCancelled();
         } else {
-            BraintreeSubscription::update($subscription->id, [
-                'numberOfBillingCycles' => $subscription->currentBillingCycle,
-            ]);
+            $cycles = $subscription->currentBillingCycle;
+            if ($cycles == 0) {
+                BraintreeSubscription::cancel($subscription->id);
 
-            $this->ends_at = $subscription->billingPeriodEndDate;
+                $this->ends_at = $endDate;
 
-            $this->save();
+                $this->save();
+            } else {
+                BraintreeSubscription::update($subscription->id, [
+                    'numberOfBillingCycles' => $cycles
+                ]);
+
+                $this->ends_at = $endDate;
+
+                $this->save();
+            }
         }
 
 
